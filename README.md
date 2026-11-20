@@ -1,5 +1,7 @@
 # VRM Motion Studio
 
+[日本語](README.ja.md)
+
 Turn a dance or action video into a VRM animation (`.vrma`), right in the browser, and watch it on a retro Pyxel 3 avatar.
 A sister tool of [VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer).
 

@@ -1,5 +1,7 @@
 # VRM Motion Studio
 
+[English](README.md)
+
 ダンスや動きの動画から、VRM のモーション（`.vrma`）をブラウザだけで作るツールです。Pyxel 3 のレトロなアバターで動きを確かめられます。[VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer) の姉妹ツールです。
 
 - itch.io で遊べます：https://haruka-apps-games.itch.io/
