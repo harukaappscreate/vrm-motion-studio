@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pyxel 3 VRM Motion Studio</title>
+  <script>
+    const _origFetch = window.fetch;
+    window.fetch = function(input, init) {
+      if (typeof input === "string" && input.indexOf(".pyxapp") !== -1) {
+        const sep = input.indexOf("?") !== -1 ? "&" : "?";
+        input = input + sep + "_v=" + Date.now();
+        init = Object.assign({}, init || {}, { cache: "no-store" });
+      }
+      return _origFetch.call(this, input, init);
+    };
+  </script>
+  <script src="https://kitao.dev/pyxel/3.0.1/pyxel.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bar: 44px;
+      --panel: 380px;
+      --bg: #11131a;
+      --panel-bg: #1a1e29;
+      --border: #2c3347;
+      --accent: #56b6c2;
+      --warn: #e06c75;
+      --rec: #ef4444;
+      --text: #e6e9ef;
+      --muted: #9aa3b2;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--bar);
+      z-index: 1000;
+      background: #161924;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .status {
+      font-size: 12px;
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* Force pyxel.js #pyxel-screen into the left area */
+    #pyxel-screen {
+      position: fixed !important;
+      top: var(--bar) !important;
+      left: 0 !important;
+      right: var(--panel) !important;
+      bottom: 0 !important;
+      width: auto !important;
+      height: auto !important;
+    }
+    .panel {
+      position: fixed;
+      top: var(--bar);
+      right: 0;
+      bottom: 0;
+      width: var(--panel);
+      z-index: 900;
+      overflow-y: auto;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    @media (max-width: 820px) {
+      #pyxel-screen { right: 0 !important; bottom: 48% !important; }
+      .panel { top: 52%; left: 0; width: auto; border-left: 0; border-top: 1px solid var(--border); }
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button, .file-label {
+      background: #272d3d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover, .file-label:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--border); }
+    button.primary, .file-label.primary {
+      background: #1f4d57;
+      border-color: var(--accent);
+    }
+    button.recording {
+      background: #5c191d;
+      border-color: var(--rec);
+      color: #fecaca;
+    }
+    input[type="file"] { display: none; }
+    .vrm-box {
+      background: #12151f;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .vrm-box .warn { color: var(--warn); font-weight: 600; margin-top: 4px; }
+    .notice {
+      background: #141925;
+      border: 1px solid #2b344a;
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .video-stage {
+      position: relative;
+      width: 100%;
+      background: #090b10;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      min-height: 185px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .video-stage.dragover {
+      border-color: var(--accent);
+      background: #13222b;
+    }
+    video {
+      width: 100%;
+      display: block;
+      max-height: 230px;
+      object-fit: contain;
+    }
+    canvas#overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    label.ctrl {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .rec-meta {
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    .credits {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pyxel 3 VRM Motion Studio</h1>
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+      <div id="status" class="status">Initializing MediaPipe &amp; Pyxel 3...</div>
+      <button id="btn-lang" type="button" style="flex-shrink:0;padding:4px 9px;font-size:11px;">日本語</button>
+    </div>
+  </header>
+
+  <pyxel-play root="." name="app.pyxapp" packages="numpy,pillow"></pyxel-play>
+
+  <div class="panel" id="ui-panel">
+    <div class="section-title" data-i18n="sec_vrm">1. VRM Avatar (.vrm 0.x / 1.0)</div>
+    <div class="row">
+      <label class="file-label primary">
+        <span data-i18n="btn_load_vrm">Load VRM (.vrm)</span>
+        <input id="vrm-input" type="file" accept=".vrm,.glb" />
+      </label>
+      <span id="vrm-meta" data-i18n="vrm_default" style="font-size:11px;color:var(--muted);">Default: Sendagaya Shibu (CC0)</span>
+    </div>
+    <div id="vrm-box" class="vrm-box" style="display:none;"></div>
+
+    <div class="section-title" data-i18n="sec_video">2. Video Source (Samples / Local MP4)</div>
+    <div class="row">
+      <button class="primary sample-btn" data-src="./sample1.mp4">Sample 1</button>
+      <button class="primary sample-btn" data-src="./sample2.mp4">Sample 2</button>
+      <button class="primary sample-btn" data-src="./sample3.mp4">Sample 3</button>
+      <label class="file-label">
+        <span data-i18n="btn_choose_video">Choose Video (.mp4)</span>
+        <input id="file-input" type="file" accept=".mp4,video/mp4,video/*" />
+      </label>
+    </div>
+
+    <div class="notice" data-i18n="notice_privacy">
+      * Use only videos you own rights to or AI-generated videos. All analysis and conversion run locally in your browser; nothing is uploaded or stored on any server.
+    </div>
+
+    <div class="video-stage" id="drop-zone">
+      <video id="video" loop muted playsinline controls crossorigin="anonymous"></video>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="row">
+      <button id="btn-play">Play / Pause</button>
+      <button id="btn-speed">Speed: 1.0x</button>
+      <button id="btn-person">Switch Person (#1)</button>
+      <button id="btn-reset">Pose Reset</button>
+    </div>
+
+    <div class="section-title" data-i18n="sec_rec">3. Record &amp; Export (.vrma / GIF / PNG)</div>
+    <div class="row">
+      <button id="btn-rec" class="primary">● Start Recording (max 30s)</button>
+      <span id="rec-meta" class="rec-meta">0.0s / 30s (0f)</span>
+    </div>
+    <div class="row">
+      <button id="btn-export-vrma" disabled data-i18n="btn_export_vrma">Export VRMA (.vrma)</button>
+      <button id="btn-export-gif" disabled data-i18n="btn_export_gif">Save GIF (max 8s)</button>
+      <button id="btn-export-png" data-i18n="btn_export_png">Screenshot (PNG)</button>
+    </div>
+
+    <div class="section-title" data-i18n="sec_disp">4. Display &amp; Stabilization</div>
+    <label class="ctrl">
+      <span><span data-i18n="lbl_smooth">Smoothing</span> (<span id="smooth-val">0.45</span>)</span>
+      <input id="smooth-range" type="range" min="0.10" max="1.00" step="0.05" value="0.45" />
+    </label>
+
+    <label class="ctrl">
+      <span data-i18n="lbl_overlay">2D Skeleton Overlay</span>
+      <input id="show-overlay" type="checkbox" checked />
+    </label>
+
+    <label class="ctrl">
+      <span data-i18n="lbl_markers">3D Debug Axes (M key)</span>
+      <input id="show-markers" type="checkbox" />
+    </label>
+
+    <div class="credits" data-i18n-html="credits">
+      Camera: Drag Pyxel screen or Arrow keys to orbit · Wheel to zoom · R to reset<br />
+      MediaPipe Tasks Vision (Apache-2.0) + Kalidokit (MIT) + Pyxel 3 (MIT)<br />
+      Sample Avatar: Sendagaya Shibu (CC0) / Sample Videos: AI Generated
+    </div>
+    <div class="credits" data-i18n-html="disclaimer">
+      <strong>Disclaimer</strong><br />
+      This tool and everything it exports are provided &ldquo;AS IS&rdquo;, without warranty of any kind. The author accepts no liability for any damage or trouble arising from their use. You are responsible for following the license and rights of the VRM and video files you load.
+    </div>
+  </div>
+
+  <script type="module">
+    import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+
+    const statusEl = document.getElementById("status");
+    const video = document.getElementById("video");
+    const overlay = document.getElementById("overlay");
+    const ctx = overlay.getContext("2d");
+    const uiPanel = document.getElementById("ui-panel");
+    const dropZone = document.getElementById("drop-zone");
+    const vrmInput = document.getElementById("vrm-input");
+    const vrmMeta = document.getElementById("vrm-meta");
+    const vrmBox = document.getElementById("vrm-box");
+    const fileInput = document.getElementById("file-input");
+    const smoothRange = document.getElementById("smooth-range");
+    const smoothVal = document.getElementById("smooth-val");
+    const showOverlay = document.getElementById("show-overlay");
+    const showMarkers = document.getElementById("show-markers");
+    const sampleBtns = document.querySelectorAll(".sample-btn");
+    const btnPlay = document.getElementById("btn-play");
+    const btnSpeed = document.getElementById("btn-speed");
+    const btnReset = document.getElementById("btn-reset");
+    const btnPerson = document.getElementById("btn-person");
+    const btnRec = document.getElementById("btn-rec");
+    const recMeta = document.getElementById("rec-meta");
+    const btnExportVrma = document.getElementById("btn-export-vrma");
+    const btnExportGif = document.getElementById("btn-export-gif");
+    const btnExportPng = document.getElementById("btn-export-png");
+
+    // Prevent Pyxel canvas from stealing UI clicks/keys
+    for (const ev of ["keydown", "keyup", "keypress", "mousedown", "mouseup", "wheel"]) {
+      uiPanel.addEventListener(ev, (e) => e.stopPropagation());
+    }
+
+    let poseLandmarker = null;
+    let lastVideoTime = -1;
+    let seq = 0;
+    let currentObjectUrl = null;
+    let targetCenter = null;
+    let lastPosesCount = 0;
+    let selectedPoseIdx = 0;
+    let isRecording = false;
+    const speeds = [1.0, 0.5, 0.25];
+    let speedIdx = 0;
+
+    const btnLang = document.getElementById("btn-lang");
+    let currentLang = (() => {
+      try {
+        return localStorage.getItem("vrm_studio_lang") === "ja" ? "ja" : "en";
+      } catch {
+        return "en";
+      }
+    })();
+
+    const I18N = {
+      en: {
+        lang_toggle: "日本語",
+        sec_vrm: "1. VRM Avatar (.vrm 0.x / 1.0)",
+        btn_load_vrm: "Load VRM (.vrm)",
+        vrm_default: "Default: Sendagaya Shibu (CC0)",
+        sec_video: "2. Video Source (Samples / Local MP4)",
+        btn_choose_video: "Choose Video (.mp4)",
+        notice_privacy: "* Use only videos you own rights to or AI-generated videos. All analysis and conversion run locally in your browser; nothing is uploaded or stored on any server.",
+        btn_person_idle: "Switch Person (#1)",
+        btn_person_idx: (i, n) => `Switch Person (#${i}/${n})`,
+        btn_person_lost: (n) => `Person Lost (0/${n})`,
+        sec_rec: "3. Record & Export (.vrma / GIF / PNG)",
+        btn_rec_start: "● Start Recording (max 30s)",
+        btn_rec_stop: "■ Stop Recording (Recording...)",
+        btn_export_vrma: "Export VRMA (.vrma)",
+        btn_export_gif: "Save GIF (max 8s)",
+        btn_export_png: "Screenshot (PNG)",
+        sec_disp: "4. Display & Stabilization",
+        lbl_smooth: "Smoothing",
+        lbl_overlay: "2D Skeleton Overlay",
+        lbl_markers: "3D Debug Axes (M key)",
+        credits: 'Camera: Drag Pyxel screen or Arrow keys to orbit · Wheel to zoom · R to reset<br />MediaPipe Tasks Vision (Apache-2.0) + Kalidokit (MIT) + Pyxel 3 (MIT)<br />Sample Avatar: Sendagaya Shibu (CC0) / Sample Videos: AI Generated',
+        disclaimer: '<strong>Disclaimer</strong><br />This tool and everything it exports are provided "AS IS", without warranty of any kind. The author accepts no liability for any damage or trouble arising from their use. You are responsible for following the license and rights of the VRM and video files you load.',
+        st_init: "Initializing MediaPipe & Pyxel 3...",
+        st_ready: "Ready: Playing Sample 1 (Drop .vrm / .mp4 anytime)",
+        st_pyxel_loading: "Pyxel 3 loading...",
+        st_pyxel_wait: "Pyxel 3 is still starting. Please wait a moment...",
+        st_vrm_wait: "Pyxel 3 is starting. Please load VRM after startup.",
+        st_export_err: "Export error: ",
+        st_vrm_conv: "Converting VRM: ",
+        st_vrm_err: "VRM load error: ",
+        st_vrm_done: "VRM loaded: ",
+        st_playing: "Playing: ",
+        st_vrma_gen: "Generating .vrma...",
+        st_vrma_done: "VRMA saved (52 bones): ",
+        st_gif_gen: "Generating GIF...",
+        st_gif_done: "GIF saved: pyxel_motion.gif",
+        st_png_done: "PNG saved: pyxel_vrm_shot.png",
+      },
+      ja: {
+        lang_toggle: "English",
+        sec_vrm: "1. VRM アバター (任意 .vrm 0.x / 1.0)",
+        btn_load_vrm: "VRM を読み込む (.vrm)",
+        vrm_default: "初期: 千駄ヶ谷しぶ (CC0)",
+        sec_video: "2. 動画ソース (内蔵サンプル / ローカル MP4)",
+        btn_choose_video: "動画を選択 (.mp4)",
+        notice_privacy: "※ ご自身が権利を有する動画・AI生成動画のみご使用ください。すべての解析・変換はブラウザ内で完結し、外部サーバーへ送信・保存されません。",
+        btn_person_idle: "人物切替 (#1)",
+        btn_person_idx: (i, n) => `人物切替 (#${i}/${n})`,
+        btn_person_lost: (n) => `人物ロスト (0/${n})`,
+        sec_rec: "3. 録画 & 書き出し (.vrma / GIF / PNG)",
+        btn_rec_start: "● 録画開始 (最大30秒)",
+        btn_rec_stop: "■ 録画停止 (録画中...)",
+        btn_export_vrma: "VRMA 書き出し (.vrma)",
+        btn_export_gif: "GIF 保存 (最大8秒)",
+        btn_export_png: "スクショ (PNG)",
+        sec_disp: "4. 表示・安定化設定",
+        lbl_smooth: "スムージング",
+        lbl_overlay: "2D骨格オーバーレイ表示",
+        lbl_markers: "3D骨格デバッグ軸 (Mキー)",
+        credits: 'カメラ: Pyxel画面をドラッグ/矢印キーで回転・ホイールでズーム・Rでリセット<br />MediaPipe Tasks Vision (Apache-2.0) + Kalidokit (MIT) + Pyxel 3 (MIT)<br />Sample Avatar: 千駄ヶ谷しぶ (CC0) / Sample Videos: AI Generated',
+        disclaimer: '<strong>免責事項</strong><br />本ツールおよび書き出されたすべてのデータは無保証（AS IS）で提供されます。利用によって生じたいかなる損害・トラブルについても作者は責任を負いません。読み込んだ VRM および動画のライセンス・権利の遵守は利用者ご自身の責任となります。',
+        st_init: "MediaPipe と Pyxel 3 を初期化中...",
+        st_ready: "Ready: Sample 1 再生中（任意 .vrm / .mp4 読込可）",
+        st_pyxel_loading: "Pyxel 3 読み込み中...",
+        st_pyxel_wait: "Pyxel 3 起動中です。少しお待ちください...",
+        st_vrm_wait: "Pyxel 3 起動中です。起動後に VRM を読み込んでください。",
+        st_export_err: "書き出しエラー: ",
+        st_vrm_conv: "VRM を変換中: ",
+        st_vrm_err: "VRM 読込エラー: ",
+        st_vrm_done: "VRM 読込完了: ",
+        st_playing: "再生中: ",
+        st_vrma_gen: ".vrma を生成中...",
+        st_vrma_done: "VRMA 保存完了 (52ボーン): ",
+        st_gif_gen: "GIF を生成中...",
+        st_gif_done: "GIF 保存完了: pyxel_motion.gif",
+        st_png_done: "PNG 保存完了: pyxel_vrm_shot.png",
+      },
+    };
+
+    function t(key) {
+      return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+    }
+
+    function applyLang(lang) {
+      currentLang = lang === "ja" ? "ja" : "en";
+      document.documentElement.lang = currentLang;
+      try {
+        localStorage.setItem("vrm_studio_lang", currentLang);
+      } catch {}
+      btnLang.textContent = t("lang_toggle");
+      for (const el of document.querySelectorAll("[data-i18n]")) {
+        const k = el.getAttribute("data-i18n");
+        if (k === "vrm_default" && vrmBox.style.display === "block") continue;
+        el.textContent = t(k);
+      }
+      for (const el of document.querySelectorAll("[data-i18n-html]")) {
+        el.innerHTML = t(el.getAttribute("data-i18n-html"));
+      }
+      btnRec.textContent = isRecording ? t("btn_rec_stop") : t("btn_rec_start");
+      if (lastPosesCount <= 0) {
+        btnPerson.textContent = t("btn_person_idle");
+      }
+    }
+
+    btnLang.addEventListener("click", () => {
+      const prev = currentLang;
+      applyLang(prev === "en" ? "ja" : "en");
+      for (const k of ["st_init", "st_ready", "st_pyxel_loading"]) {
+        if (statusEl.textContent === I18N[prev][k]) {
+          setStatus(t(k));
+          break;
+        }
+      }
+    });
+    applyLang(currentLang);
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function getPy() {
+      return window.pyxelContext && window.pyxelContext.pyodide;
+    }
+
+    function sendToPyxel(payload) {
+      const py = getPy();
+      if (!py) return false;
+      const val = typeof payload === "string" ? payload : JSON.stringify(payload);
+      py.runPython("import pyxel; pyxel._pose = " + JSON.stringify(val));
+      return true;
+    }
+
+    function downloadBytes(bytes, filename, mime) {
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function runPyCmd(cmd, onDone) {
+      const py = getPy();
+      if (!py) {
+        setStatus(t("st_pyxel_wait"));
+        return;
+      }
+      py.runPython(`import pyxel; pyxel._export_ready = ""; pyxel._export_error = ""; pyxel._rec_cmd = ${JSON.stringify(cmd)}`);
+      if (!onDone) return;
+      const started = performance.now();
+      const poll = () => {
+        try {
+          const res = JSON.parse(py.runPython('import json, pyxel; json.dumps({"ready": getattr(pyxel, "_export_ready", ""), "err": getattr(pyxel, "_export_error", "")})'));
+          if (res.err) {
+            setStatus(t("st_export_err") + res.err);
+            return;
+          }
+          if (res.ready) {
+            onDone(res.ready, py);
+            return;
+          }
+        } catch {}
+        if (performance.now() - started < 15000) requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
+    }
+
+    async function loadVrmFile(file) {
+      const py = getPy();
+      if (!py) {
+        setStatus(t("st_vrm_wait"));
+        return;
+      }
+      setStatus(t("st_vrm_conv") + file.name + " ...");
+      const buf = new Uint8Array(await file.arrayBuffer());
+      py.FS.writeFile("/tmp/user_model.vrm", buf);
+      py.runPython('import pyxel; pyxel._vrm_error = ""; pyxel._vrm_info_json = ""; pyxel._pending_vrm = "/tmp/user_model.vrm"');
+
+      const started = performance.now();
+      const pollVrm = () => {
+        try {
+          const res = JSON.parse(py.runPython('import json, pyxel; json.dumps({"info": getattr(pyxel, "_vrm_info_json", ""), "err": getattr(pyxel, "_vrm_error", "")})'));
+          if (res.err) {
+            setStatus(t("st_vrm_err") + res.err);
+            return;
+          }
+          if (res.info) {
+            const info = JSON.parse(res.info);
+            vrmMeta.textContent = `${info.title || file.name} (${info.version || "VRM"})`;
+            vrmBox.style.display = "block";
+            const licHtml = (info.license || []).map((l) => `<div>${l}</div>`).join("");
+            const warnHtml = (info.warnings || []).map((w) => `<div class="warn">⚠ ${w}</div>`).join("");
+            vrmBox.innerHTML = `<div><strong>${info.title || "?"}</strong> / ${info.author || "?"}</div>${licHtml}${warnHtml}`;
+            setStatus(t("st_vrm_done") + (info.title || file.name));
+            return;
+          }
+        } catch {}
+        if (performance.now() - started < 20000) requestAnimationFrame(pollVrm);
+      };
+      requestAnimationFrame(pollVrm);
+    }
+
+    function vec3(rot) {
+      if (!rot) return null;
+      return [
+        Number((rot.x || 0).toFixed(4)),
+        Number((rot.y || 0).toFixed(4)),
+        Number((rot.z || 0).toFixed(4)),
+      ];
+    }
+
+    function poseCenter(lm) {
+      if (!lm || !lm[23] || !lm[24]) return lm && lm[0] ? [lm[0].x, lm[0].y] : [0.5, 0.5];
+      return [0.5 * (lm[23].x + lm[24].x), 0.5 * (lm[23].y + lm[24].y)];
+    }
+
+    function pickPoseIndex(allLm) {
+      if (!allLm || !allLm.length) return { idx: -1, dist: 0 };
+      if (!targetCenter) {
+        const idx = Math.min(selectedPoseIdx, allLm.length - 1);
+        targetCenter = poseCenter(allLm[idx]);
+        return { idx, dist: 0 };
+      }
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < allLm.length; i++) {
+        const c = poseCenter(allLm[i]);
+        const d = Math.hypot(c[0] - targetCenter[0], c[1] - targetCenter[1]);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      }
+      if (bestDist > 0.18) return { idx: -1, dist: bestDist };
+      targetCenter = poseCenter(allLm[bestIdx]);
+      return { idx: bestIdx, dist: bestDist };
+    }
+
+    function drawOverlay(allLandmarks, activeIdx) {
+      const w = video.clientWidth;
+      const h = video.clientHeight;
+      if (overlay.width !== w || overlay.height !== h) {
+        overlay.width = w;
+        overlay.height = h;
+      }
+      ctx.clearRect(0, 0, w, h);
+      if (!showOverlay.checked || !allLandmarks || !allLandmarks.length) return;
+
+      const vw = video.videoWidth || 1;
+      const vh = video.videoHeight || 1;
+      const scale = Math.min(w / vw, h / vh);
+      const rw = vw * scale;
+      const rh = vh * scale;
+      const ox = (w - rw) * 0.5;
+      const oy = (h - rh) * 0.5;
+
+      for (let pi = 0; pi < allLandmarks.length; pi++) {
+        const landmarks = allLandmarks[pi];
+        ctx.fillStyle = pi === activeIdx ? "#56b6c2" : "rgba(255, 210, 90, 0.55)";
+        const r = pi === activeIdx ? 3 : 2;
+        for (const lm of landmarks) {
+          if ((lm.visibility ?? 1) < 0.3) continue;
+          ctx.beginPath();
+          ctx.arc(ox + lm.x * rw, oy + lm.y * rh, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    async function initPoseLandmarker() {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        const modelUrl =
+          "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+        try {
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numPoses: 4,
+          });
+        } catch {
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: "CPU" },
+            runningMode: "VIDEO",
+            numPoses: 4,
+          });
+        }
+        loadVideoSrc("./sample1.mp4", false);
+        setStatus(t("st_ready"));
+      } catch (err) {
+        console.error(err);
+        setStatus("MediaPipe load error: " + err.message);
+      }
+    }
+
+    function loadVideoSrc(src, isObjectUrl = false) {
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = null;
+      }
+      if (isObjectUrl) currentObjectUrl = src;
+      lastVideoTime = -1;
+      targetCenter = null;
+      sendToPyxel("reset");
+      video.src = src;
+      video.playbackRate = speeds[speedIdx];
+      video.play().catch(() => {});
+    }
+
+    vrmInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) loadVrmFile(file);
+    });
+
+    for (const btn of sampleBtns) {
+      btn.addEventListener("click", () => {
+        const src = btn.dataset.src;
+        loadVideoSrc(src, false);
+        setStatus(t("st_playing") + btn.textContent);
+      });
+    }
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      loadVideoSrc(URL.createObjectURL(file), true);
+      setStatus(t("st_playing") + file.name);
+    });
+
+    function handleDroppedFile(file) {
+      if (!file) return;
+      if (/\.(vrm|glb)$/i.test(file.name)) {
+        loadVrmFile(file);
+      } else {
+        loadVideoSrc(URL.createObjectURL(file), true);
+        setStatus(t("st_playing") + file.name);
+      }
+    }
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      handleDroppedFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
+
+    // Also allow dropping .vrm anywhere on window
+    window.addEventListener("dragover", (e) => e.preventDefault());
+    window.addEventListener("drop", (e) => {
+      if (e.target.closest && e.target.closest("#drop-zone")) return;
+      e.preventDefault();
+      handleDroppedFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
+
+    btnPlay.addEventListener("click", () => {
+      if (!video.src) return;
+      if (video.paused) video.play();
+      else video.pause();
+    });
+
+    btnSpeed.addEventListener("click", () => {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      video.playbackRate = speeds[speedIdx];
+      btnSpeed.textContent = "Speed: " + speeds[speedIdx].toFixed(2).replace(/0$/, "") + "x";
+    });
+
+    btnReset.addEventListener("click", () => {
+      targetCenter = null;
+      sendToPyxel("reset");
+    });
+
+    btnPerson.addEventListener("click", () => {
+      if (lastPosesCount <= 1) return;
+      selectedPoseIdx = (selectedPoseIdx + 1) % lastPosesCount;
+      targetCenter = null;
+      btnPerson.textContent = t("btn_person_idx")(selectedPoseIdx + 1, lastPosesCount);
+    });
+
+    dropZone.addEventListener("click", (e) => {
+      const rect = video.getBoundingClientRect();
+      const vw = video.videoWidth || 1;
+      const vh = video.videoHeight || 1;
+      const scale = Math.min(rect.width / vw, rect.height / vh);
+      const rw = vw * scale;
+      const rh = vh * scale;
+      const ox = rect.left + (rect.width - rw) * 0.5;
+      const oy = rect.top + (rect.height - rh) * 0.5;
+      const nx = (e.clientX - ox) / rw;
+      const ny = (e.clientY - oy) / rh;
+      if (nx >= 0 && nx <= 1 && ny >= 0 && ny <= 0.85) {
+        targetCenter = [nx, ny];
+      }
+    });
+
+    btnRec.addEventListener("click", () => {
+      if (!isRecording) {
+        isRecording = true;
+        btnRec.classList.add("recording");
+        btnRec.textContent = t("btn_rec_stop");
+        btnExportVrma.disabled = true;
+        btnExportGif.disabled = true;
+        runPyCmd("start");
+      } else {
+        isRecording = false;
+        btnRec.classList.remove("recording");
+        btnRec.textContent = t("btn_rec_start");
+        runPyCmd("stop");
+      }
+    });
+
+    btnExportVrma.addEventListener("click", () => {
+      setStatus(t("st_vrma_gen"));
+      runPyCmd("export_vrma", (_ready, py) => {
+        const bytes = py.FS.readFile("/tmp/export_motion.vrma");
+        const fname = "pyxel_motion_" + new Date().toTimeString().slice(0, 8).replace(/:/g, "") + ".vrma";
+        downloadBytes(bytes, fname, "application/octet-stream");
+        setStatus(t("st_vrma_done") + fname);
+      });
+    });
+
+    btnExportGif.addEventListener("click", () => {
+      setStatus(t("st_gif_gen"));
+      runPyCmd("export_gif", (_ready, py) => {
+        const bytes = py.FS.readFile("/tmp/export_anim.gif");
+        downloadBytes(bytes, "pyxel_motion.gif", "image/gif");
+        setStatus(t("st_gif_done"));
+      });
+    });
+
+    btnExportPng.addEventListener("click", () => {
+      runPyCmd("export_png", (_ready, py) => {
+        const bytes = py.FS.readFile("/tmp/export_shot.png");
+        downloadBytes(bytes, "pyxel_vrm_shot.png", "image/png");
+        setStatus(t("st_png_done"));
+      });
+    });
+
+    smoothRange.addEventListener("input", () => {
+      smoothVal.textContent = Number(smoothRange.value).toFixed(2);
+    });
+
+    showMarkers.addEventListener("change", () => {
+      runPyCmd("toggle_markers");
+    });
+
+    function tick() {
+      const now = performance.now();
+      const py = getPy();
+      if (py) {
+        try {
+          const st = JSON.parse(py.runPython('import json, pyxel; json.dumps({"active": bool(getattr(pyxel, "_rec_active", False)), "n": int(getattr(pyxel, "_rec_count", 0)), "g": int(getattr(pyxel, "_gif_count", 0))})'));
+          if (isRecording && !st.active && st.n > 0) {
+            isRecording = false;
+            btnRec.classList.remove("recording");
+            btnRec.textContent = t("btn_rec_start");
+          }
+          recMeta.textContent = `${(st.n / 30).toFixed(1)}s / 30s (${st.n}f)`;
+          btnExportVrma.disabled = isRecording || st.n < 2;
+          btnExportGif.disabled = isRecording || st.g < 2;
+        } catch {}
+      }
+
+      if (poseLandmarker && video.readyState >= 2 && !video.paused && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const result = poseLandmarker.detectForVideo(video, now);
+        const allLm2d = result.landmarks || [];
+        lastPosesCount = allLm2d.length;
+        const { idx: pidx } = pickPoseIndex(allLm2d);
+        const lm2d = pidx >= 0 ? allLm2d[pidx] : null;
+        const lm3d = pidx >= 0 && result.worldLandmarks ? result.worldLandmarks[pidx] : null;
+        if (lastPosesCount > 0) {
+          btnPerson.textContent = pidx >= 0
+            ? t("btn_person_idx")(pidx + 1, lastPosesCount)
+            : t("btn_person_lost")(lastPosesCount);
+        }
+        drawOverlay(allLm2d, pidx);
+
+        if (lm2d && lm3d && window.Kalidokit) {
+          const rig = window.Kalidokit.Pose.solve(lm3d, lm2d, {
+            runtime: "mediapipe",
+            video,
+            enableLegs: true,
+          });
+          if (rig) {
+            const lm3dMap = {};
+            for (const idx of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32]) {
+              const p = lm3d[idx];
+              if (p) lm3dMap[idx] = [Number(p.x.toFixed(4)), Number(p.y.toFixed(4)), Number(p.z.toFixed(4))];
+            }
+            const vw = video.videoWidth || 1;
+            const vh = video.videoHeight || 1;
+            const aspect = vw / vh;
+            const lm2dMap = {};
+            for (const idx of [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 24]) {
+              const p = lm2d[idx];
+              if (p) lm2dMap[idx] = [Number(((p.x - 0.5) * aspect).toFixed(4)), Number((-(p.y - 0.5)).toFixed(4))];
+            }
+            seq += 1;
+            const payload = {
+              seq,
+              videoTime: Number(video.currentTime.toFixed(4)),
+              tracking: { idx: pidx },
+              smooth: Number(smoothRange.value),
+              axis: "world3d",
+              lm3d: lm3dMap,
+              lm2d: lm2dMap,
+              Hips: vec3(rig.Hips && rig.Hips.rotation),
+              HipsPos: rig.Hips && rig.Hips.position ? vec3(rig.Hips.position) : null,
+              Spine: vec3(rig.Spine),
+              LeftUpperArm: vec3(rig.LeftUpperArm),
+              LeftLowerArm: vec3(rig.LeftLowerArm),
+              LeftHand: vec3(rig.LeftHand),
+              RightUpperArm: vec3(rig.RightUpperArm),
+              RightLowerArm: vec3(rig.RightLowerArm),
+              RightHand: vec3(rig.RightHand),
+              LeftUpperLeg: vec3(rig.LeftUpperLeg),
+              LeftLowerLeg: vec3(rig.LeftLowerLeg),
+              RightUpperLeg: vec3(rig.RightUpperLeg),
+              RightLowerLeg: vec3(rig.RightLowerLeg),
+            };
+            const sent = sendToPyxel(payload);
+            if (!sent) {
+              window._pyxelWasLoading = true;
+              setStatus(t("st_pyxel_loading"));
+            } else if (window._pyxelWasLoading) {
+              window._pyxelWasLoading = false;
+              setStatus(t("st_ready"));
+            }
+          }
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    initPoseLandmarker();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
