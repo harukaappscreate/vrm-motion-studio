@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-ダンスや動きの動画から、VRM のモーション（`.vrma`）をブラウザだけで作るツールです。Pyxel 3 のレトロなアバターで動きを確かめられます。[VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer)、[VRM RETRO MAKER](https://github.com/harukaappscreate/vrm-retro-maker)、[VRM RETRO PAPERCRAFT](https://github.com/harukaappscreate/vrm-retro-papercraft) の姉妹ツールです。
+ダンスや動きの動画から、VRM のモーション（`.vrma`）をブラウザだけで作るツールです。Pyxel 3 のレトロなアバターで動きを確かめられます。[VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer)、[VRM RETRO MAKER](https://github.com/harukaappscreate/vrm-retro-maker)、[VRM RETRO PAPERCRAFT](https://github.com/harukaappscreate/vrm-retro-papercraft)、[VRM RETRO 4DGS STUDIO](https://github.com/harukaappscreate/vrm-retro-4dgs) の姉妹ツールです。
 
 - itch.io で遊べます：https://haruka-apps-games.itch.io/
 - すべてブラウザの中で動きます。インストールは不要で、動画はどこにも送られません。

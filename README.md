@@ -3,7 +3,7 @@
 [日本語](README.ja.md)
 
 Turn a dance or action video into a VRM animation (`.vrma`), right in the browser, and watch it on a retro Pyxel 3 avatar.
-A sister tool of [VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer), [VRM RETRO MAKER](https://github.com/harukaappscreate/vrm-retro-maker) and [VRM RETRO PAPERCRAFT](https://github.com/harukaappscreate/vrm-retro-papercraft).
+A sister tool of [VRM RETRO VIEWER](https://github.com/harukaappscreate/vrm-retro-viewer), [VRM RETRO MAKER](https://github.com/harukaappscreate/vrm-retro-maker), [VRM RETRO PAPERCRAFT](https://github.com/harukaappscreate/vrm-retro-papercraft) and [VRM RETRO 4DGS STUDIO](https://github.com/harukaappscreate/vrm-retro-4dgs).
 
 ![cover](docs/images/cover.png)
 
